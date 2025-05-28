@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["es6", "es2016", "dom"],
+    // "module": "System",
+    "experimentalDecorators": true,
+    "strict": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./node_modules/@figma"
+    ],
+    "outDir": "./build",
+    // "outFile": "build/code.js",
+    "jsx": "react",
+    "allowJs": true,
+    "noImplicitAny": false,
+    "moduleResolution": "node",
+    "strictNullChecks": false,
+    "esModuleInterop": true,
+  },
+  "include": ["src/**/*.ts"]
+}

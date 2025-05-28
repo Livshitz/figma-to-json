@@ -1,0 +1,26 @@
+{
+  "name": "figma-to-json",
+  "id": "1399388645422727783",
+  "api": "1.0.0",
+  "main": "build/code.js",
+  "capabilities": [
+    "codegen"
+  ],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": [
+    "dev"
+  ],
+  "ui": "ui.html",
+  "codegenLanguages": [
+    {
+      "label": "Language Label",
+      "value": "language-value"
+    }
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  }
+}

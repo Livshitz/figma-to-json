@@ -1,0 +1,20 @@
+<button id="exportBtn">Export to JSON</button>
+<script>
+  document.getElementById("exportBtn").addEventListener("click", () => {
+	parent.postMessage({ pluginMessage: { type: "export-json" } }, "*");
+  });
+
+  window.onmessage = (event) => {
+	const { type, json } = event.data.pluginMessage;
+	if (type === "export-done") {
+	  navigator.clipboard.writeText(json)
+		.then(() => {
+			alert("JSON copied to clipboard!");
+		})
+		.catch((err) => {
+			alert("Failed to copy JSON");
+			console.error("Copy error:", err);
+		});
+	}
+  };
+</script>
