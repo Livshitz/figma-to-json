@@ -4,7 +4,7 @@
   "description": "Your Figma Plugin",
   "main": "build/code.js",
   "scripts": {
-    "build": "esbuild src/code2.ts --bundle --outfile=build/code.js --target=es6",
+    "build": "esbuild src/code.ts --bundle --outfile=build/code.js --target=es6",
     "build:old": "tsc -p tsconfig.json",
     "watch": "bun run build:main --watch",
     "lint": "eslint --ext .ts,.tsx --ignore-pattern node_modules .",
