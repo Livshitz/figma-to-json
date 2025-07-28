@@ -1,20 +1,70 @@
 <button id="exportBtn">Export to JSON</button>
+<div id="errorSection" style="display: none; margin-top: 10px; padding: 10px; background: #ffebee; border: 1px solid #f44336; border-radius: 4px;">
+  <p id="errorMessage" style="color: #d32f2f; margin: 0 0 10px 0;"></p>
+  <button id="copyErrorBtn" style="margin-right: 10px;">Copy Error Details</button>
+  <button id="copyNodeBtn">Copy Node Data</button>
+</div>
+<div id="successMessage" style="display: none; margin-top: 10px; padding: 10px; background: #e8f5e8; border: 1px solid #4caf50; border-radius: 4px; color: #2e7d32;">
+  JSON copied to clipboard!
+</div>
+
 <script>
+  let lastErrorData = null;
+  let lastNodeData = null;
+
   document.getElementById("exportBtn").addEventListener("click", () => {
+	hideMessages();
 	parent.postMessage({ pluginMessage: { type: "export-json" } }, "*");
   });
 
+  document.getElementById("copyErrorBtn").addEventListener("click", () => {
+	if (lastErrorData) {
+	  navigator.clipboard.writeText(JSON.stringify(lastErrorData, null, 2))
+		.then(() => alert("Error details copied to clipboard!"))
+		.catch(() => alert("Failed to copy error details"));
+	}
+  });
+
+  document.getElementById("copyNodeBtn").addEventListener("click", () => {
+	if (lastNodeData) {
+	  navigator.clipboard.writeText(JSON.stringify(lastNodeData, null, 2))
+		.then(() => alert("Node data copied to clipboard!"))
+		.catch(() => alert("Failed to copy node data"));
+	}
+  });
+
+  function hideMessages() {
+	document.getElementById("errorSection").style.display = "none";
+	document.getElementById("successMessage").style.display = "none";
+  }
+
+  function showError(message, errorData, nodeData) {
+	document.getElementById("errorMessage").textContent = message;
+	document.getElementById("errorSection").style.display = "block";
+	lastErrorData = errorData;
+	lastNodeData = nodeData;
+  }
+
+  function showSuccess() {
+	document.getElementById("successMessage").style.display = "block";
+	setTimeout(() => {
+	  document.getElementById("successMessage").style.display = "none";
+	}, 3000);
+  }
+
   window.onmessage = (event) => {
-	const { type, json } = event.data.pluginMessage;
+	const { type, json, error, errorData, nodeData } = event.data.pluginMessage;
+	
 	if (type === "export-done") {
 	  navigator.clipboard.writeText(json)
 		.then(() => {
-			alert("JSON copied to clipboard!");
+		  showSuccess();
 		})
 		.catch((err) => {
-			alert("Failed to copy JSON");
-			console.error("Copy error:", err);
+		  showError("Failed to copy JSON to clipboard", { clipboardError: err.message }, null);
 		});
+	} else if (type === "export-error") {
+	  showError(error || "An error occurred while processing the node", errorData, nodeData);
 	}
   };
 </script>

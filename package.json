@@ -1,6 +1,6 @@
 {
   "name": "figma-to-json",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Your Figma Plugin",
   "main": "build/code.js",
   "scripts": {

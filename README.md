@@ -23,7 +23,7 @@ A Figma plugin that exports your designs to structured JSON format with comprehe
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd figma-to-json
+cd figma-export-to-json
 ```
 
 2. Install dependencies:
@@ -45,15 +45,15 @@ bun run build
 
 ## 🎯 Usage
 
-### Using the Plugin
+### Using the Plugin UI
 
 1. Open a Figma file with your design
-2. Select the node(s) you want to export
-3. Go to **Plugins** → **figma-to-json**
-4. Click **Export to JSON** button
+2. Go to **Plugins** → **figma-to-json** 
+3. Select the node(s) you want to export (you can select multiple nodes)
+4. Click **Export to JSON** button in the plugin window
 5. The JSON will be copied to your clipboard automatically
 
-### Code Generation
+### Code Generation Mode
 
 This plugin also supports Figma's native code generation feature:
 
@@ -61,6 +61,21 @@ This plugin also supports Figma's native code generation feature:
 2. Open the **Code** panel (right sidebar)
 3. Choose the plugin from the code generation options
 4. View the generated JSON output
+
+**Note**: The plugin works in two modes:
+- **Plugin UI Mode**: Full-featured export with UI controls and error handling
+- **Code Generation Mode**: Quick export through Figma's code panel
+
+### Error Handling & Debugging
+
+If the plugin encounters an error while processing a node:
+
+1. **Error Display**: An error message will appear in the plugin UI
+2. **Copy Error Details**: Click "Copy Error Details" to get technical error information
+3. **Copy Node Data**: Click "Copy Node Data" to get the problematic node's structure
+4. **Report Issues**: Use the copied data to report issues for debugging
+
+This feature helps developers troubleshoot specific nodes that cause crashes and provides detailed debugging information.
 
 ## 🏗️ Development
 
@@ -107,7 +122,25 @@ The exported JSON includes:
 - **Styling**: `fills`, `strokes`, `effects`, `opacity`, `blendMode`
 - **Typography**: `fontSize`, `fontName`, `textAlign`, `characters` (for text nodes)
 - **Border Radius**: Individual corner radius values
+- **Enhanced CSS Variables**: Variable names include collection names to avoid conflicts
 - **Hierarchy**: Nested `children` array for parent nodes
+
+#### CSS Variables with Collections
+
+When Figma variables are used, the exported CSS includes collection names:
+
+```json
+{
+  "cssProps": {
+    "background-color": "#ff0000",
+    "background-color-variable": "--theme-primary-color",
+    "background-color-collection": "Theme Colors",
+    "background-color-variable-id": "VariableID:123"
+  }
+}
+```
+
+This prevents naming conflicts when multiple collections have variables with the same name.
 
 Example output:
 ```json
@@ -118,6 +151,11 @@ Example output:
   "width": 120,
   "height": 40,
   "fills": [...],
+  "cssProps": {
+    "background-color": "#007AFF",
+    "background-color-variable": "--design-system-primary-blue",
+    "background-color-collection": "Design System"
+  },
   "borderRadius": {
     "topLeft": 8,
     "topRight": 8,

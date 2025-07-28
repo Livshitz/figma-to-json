@@ -27,7 +27,7 @@ const allPropertyNames = [
 	"x",
 	"y",
 	"rotation",
-	"constrainProportions",
+	"targetAspectRatio",
 	"layoutAlign",
 	"layoutGrow",
 	"opacity",
@@ -140,30 +140,43 @@ const cloneObject = (obj: any, valuesSet = new Set()) => {
 };
 
 async function postSelection() {
-	figma.ui.postMessage({
-		type: "selectionChange",
-		elements: fastClone(
-			await Promise.all(
-				figma.currentPage.selection.map((el) =>
-					serialize(el as any, {
-						// TODO: only need one level deep......
-						withChildren: true,
-					})
-				)
-			)
-		),
+	// Only send selection updates if UI is available
+	try {
+		if (figma.ui) {
+			figma.ui.postMessage({
+				type: "selectionChange",
+				elements: fastClone(
+					await Promise.all(
+						figma.currentPage.selection.map((el) =>
+							serialize(el as any, {
+								// TODO: only need one level deep......
+								withChildren: true,
+							})
+						)
+					)
+				),
+			});
+		}
+	} catch (error) {
+		// UI not available (happens in codegen mode), silently continue
+		console.log("Selection change: UI not available");
+	}
+}
+
+// Only listen to selection changes if UI is available
+if (figma.command === undefined) {
+	figma.on("selectionchange", async () => {
+		postSelection();
 	});
 }
 
-figma.on("selectionchange", async () => {
-	postSelection();
-});
-
-// This shows the HTML page in "ui.html".
-// figma.showUI(__html__, {
-// 	width: settings.ui.baseWidth,
-// 	height: settings.ui.baseHeight,
-// });
+// Show UI when plugin is launched (not during codegen)
+if (figma.command === undefined) {
+	figma.showUI(__html__, {
+		width: settings.ui.baseWidth,
+		height: settings.ui.baseHeight,
+	});
+}
 async function processImages(layer: RectangleNode | TextNode) {
 	const images = getImageFills(layer);
 	return (
@@ -217,6 +230,69 @@ async function getMatchingFont(fontStr: string, availableFonts: Font[]) {
 
 const fontCache: { [key: string]: FontName | undefined } = {};
 
+// CSS variable naming utilities
+function getCSSVariableNameWithCollection(variableName: string, collectionName?: string): string {
+	// Normalize names for CSS variables
+	const normalizeForCSS = (name: string) => 
+		name.toLowerCase()
+			.replace(/\s+/g, '-')
+			.replace(/[^a-z0-9-]/g, '')
+			.replace(/-+/g, '-')
+			.replace(/^-|-$/g, '');
+
+	const normalizedVar = normalizeForCSS(variableName);
+	
+	if (collectionName) {
+		const normalizedCollection = normalizeForCSS(collectionName);
+		return `--${normalizedCollection}-${normalizedVar}`;
+	}
+	
+	return `--${normalizedVar}`;
+}
+
+// Enhanced CSS props extraction
+async function getEnhancedCSSProps(element: any): Promise<any> {
+	try {
+		const cssProps = await element.getCSSAsync();
+		
+		// If the element has bound variables, enhance the CSS props with collection info
+		if (element.boundVariables) {
+			const enhancedProps = { ...cssProps };
+			
+			// Process bound variables to include collection names
+			for (const [property, variable] of Object.entries(element.boundVariables)) {
+				if (variable && typeof variable === 'object' && 'id' in variable && typeof property === 'string') {
+					try {
+						const figmaVariable = await figma.variables.getVariableByIdAsync(variable.id as string);
+						if (figmaVariable) {
+							const collection = await figma.variables.getVariableCollectionByIdAsync(figmaVariable.variableCollectionId);
+							const collectionName = collection?.name;
+							const variableName = figmaVariable.name;
+							
+							// Create enhanced CSS variable name
+							const enhancedVarName = getCSSVariableNameWithCollection(variableName, collectionName);
+							
+							// Add to CSS props with collection info
+							enhancedProps[`${property}-variable`] = enhancedVarName;
+							enhancedProps[`${property}-collection`] = collectionName;
+							enhancedProps[`${property}-variable-id`] = variable.id;
+						}
+					} catch (err) {
+						console.warn(`Could not resolve variable for property ${property}:`, err);
+					}
+				}
+			}
+			
+			return enhancedProps;
+		}
+		
+		return cssProps;
+	} catch (err) {
+		console.warn("Could not get CSS properties:", err);
+		return {};
+	}
+}
+
 async function serialize(
 	element: any,
 	options: {
@@ -269,7 +345,9 @@ async function serialize(
 			},
 		];
 	}
-	const cssProps = await element.getCSSAsync();
+	
+	// Enhanced CSS props with collection info
+	const cssProps = await getEnhancedCSSProps(element);
 
 	// TODO: better way to enumerate everything, including getters, that is not function
 	return {
@@ -478,7 +556,11 @@ figma.ui.onmessage = async (msg) => {
 		});
 	}
 	if (msg.type === "init") {
-		postSelection();
+		try {
+			postSelection();
+		} catch (error) {
+			console.error("Failed to post initial selection:", error);
+		}
 	}
 	if (msg.type === "setStorage") {
 		const data = msg.data;
@@ -487,24 +569,32 @@ figma.ui.onmessage = async (msg) => {
 
 	if (msg.type === "checkIfCanGetCode") {
 		const canGet = await checkIfCanGetCode();
-		figma.ui.postMessage({
-			type: "canGetCode",
-			value: canGet,
-		});
+		try {
+			figma.ui.postMessage({
+				type: "canGetCode",
+				value: canGet,
+			});
+		} catch (error) {
+			console.error("Failed to send canGetCode result:", error);
+		}
 	}
 
 	if (msg.type === "getSelectionWithImages") {
-		figma.ui.postMessage({
-			type: "selectionWithImages",
-			elements: await Promise.all(
-				figma.currentPage.selection.map((el) =>
-					serialize(el as any, {
-						withChildren: true,
-						withImages: true,
-					})
-				)
-			),
-		});
+		try {
+			figma.ui.postMessage({
+				type: "selectionWithImages",
+				elements: await Promise.all(
+					figma.currentPage.selection.map((el) =>
+						serialize(el as any, {
+							withChildren: true,
+							withImages: true,
+						})
+					)
+				),
+			});
+		} catch (error) {
+			console.error("Failed to send selection with images:", error);
+		}
 	}
 
 	if (msg.type === "updateElements") {
@@ -518,6 +608,61 @@ figma.ui.onmessage = async (msg) => {
 	}
 	if (msg.type === "clearErrors") {
 		clearAllErrors();
+	}
+
+	if (msg.type === "export-json") {
+		try {
+			const selection = figma.currentPage.selection;
+			if (selection.length === 0) {
+				figma.ui.postMessage({
+					type: "export-error",
+					error: "Please select at least one node to export",
+					errorData: { reason: "no_selection" },
+					nodeData: null
+				});
+				return;
+			}
+
+			const objArr = fastClone(
+				await Promise.all(
+					selection.map((el) =>
+						serializeWithErrorHandling(el as any, {
+							withChildren: true,
+						})
+					)
+				)
+			);
+
+			// Apply transformations
+			objArr.forEach(obj => helpers.deletePropertiesRecursively(obj, [
+				'relativeTransform',
+				'isMask',
+				'absoluteRenderBounds',
+			]));
+
+			const json = JSON.stringify(objArr, null, 2);
+			
+			figma.ui.postMessage({
+				type: "export-done",
+				json: json
+			});
+
+		} catch (err) {
+			const error = err as Error;
+			console.error("Export error:", error);
+			
+			figma.ui.postMessage({
+				type: "export-error",
+				error: `Export failed: ${error.message}`,
+				errorData: {
+					message: error.message,
+					stack: error.stack,
+					timestamp: new Date().toISOString()
+				},
+				nodeData: figma.currentPage.selection.length > 0 ? 
+					sanitizeNodeForLogging(figma.currentPage.selection[0]) : null
+			});
+		}
 	}
 
 	if (msg.type === "import") {
@@ -564,13 +709,13 @@ figma.ui.onmessage = async (msg) => {
 						if (imageFills) {
 							await processImages(layer);
 							if (imageFills.length && msg.blurImages) {
-								(layer as RectangleNode).effects = [
-									{
-										type: "LAYER_BLUR",
-										visible: true,
-										radius: 13,
-									},
-								];
+															(layer as RectangleNode).effects = [
+								{
+									type: "LAYER_BLUR",
+									visible: true,
+									radius: 13,
+								} as any,
+							];
 								(layer as RectangleNode).name = "Example Image";
 							}
 						}
@@ -647,48 +792,163 @@ figma.ui.onmessage = async (msg) => {
 	// keep running, which shows the cancel button at the bottom of the screen.
 };
 
+// Error handling utilities
+function sanitizeNodeForLogging(node: any): any {
+	try {
+		const sanitized = {
+			id: node.id,
+			name: node.name,
+			type: node.type,
+			width: node.width,
+			height: node.height,
+			visible: node.visible,
+			locked: node.locked,
+			// Add properties that might be causing issues
+			fills: node.fills ? JSON.parse(JSON.stringify(node.fills)) : undefined,
+			strokes: node.strokes ? JSON.parse(JSON.stringify(node.strokes)) : undefined,
+			effects: node.effects ? JSON.parse(JSON.stringify(node.effects)) : undefined,
+			children: node.children ? node.children.map(child => ({
+				id: child.id,
+				name: child.name,
+				type: child.type
+			})) : undefined,
+			// CSS props if available
+			cssProps: null
+		};
+
+		// Try to get CSS props safely
+		try {
+			if (node.getCSSAsync) {
+				// Note: We can't await here, but we can note it's available
+				sanitized.cssProps = "Available (async)";
+			}
+		} catch (err) {
+			const error = err as Error;
+			sanitized.cssProps = `Error: ${error.message}`;
+		}
+
+		return sanitized;
+	} catch (err) {
+		const error = err as Error;
+		return {
+			id: node.id || "unknown",
+			name: node.name || "unknown", 
+			type: node.type || "unknown",
+			error: `Failed to sanitize: ${error.message}`
+		};
+	}
+}
+
+async function serializeWithErrorHandling(element: any, options: any = {}): Promise<any> {
+	try {
+		return await serialize(element, options);
+	} catch (err) {
+		const error = err as Error;
+		const nodeData = sanitizeNodeForLogging(element);
+		const errorData = {
+			message: error.message,
+			stack: error.stack,
+			timestamp: new Date().toISOString(),
+			nodeId: element.id,
+			nodeName: element.name,
+			nodeType: element.type,
+			options: options
+		};
+
+		console.error("Serialization error:", errorData, "Node data:", nodeData);
+		
+		// Send error to UI for user feedback (only if UI is available)
+		try {
+			if (figma.ui) {
+				figma.ui.postMessage({
+					type: "export-error",
+					error: `Failed to process node "${element.name}" (${element.type}): ${error.message}`,
+					errorData: errorData,
+					nodeData: nodeData
+				});
+			}
+		} catch (uiError) {
+			// UI not available, silently continue (happens during codegen)
+			console.log("UI not available for error reporting:", uiError);
+		}
+
+		throw err; // Re-throw to handle at higher level
+	}
+}
 
 figma.codegen.on('generate', async ({ language, node }) => {
-	// const selection = figma.currentPage.selection;
-	// if (selection.length == 0) return [];
-	// const node = selection[0];
+	try {
+		console.log('DBG: Starting codegen for node:', node.name, node.type);
 
-    // console.log('test: ', _helpers.randomNumber());
-	// debugger;
-    // let obj = await convertIntoNodes([node], null);
-
-	let objArr = fastClone(
-		await Promise.all(
-			[node].map((el) =>
-				serialize(el as any, {
-					// TODO: only need one level deep......
-					withChildren: true,
-				})
+		let objArr = fastClone(
+			await Promise.all(
+				[node].map((el) =>
+					serializeWithErrorHandling(el as any, {
+						withChildren: true,
+					})
+				)
 			)
-		)
-	);
-	objArr.forEach(obj=>helpers.deletePropertiesRecursively(obj, [
-		'relativeTransform',
-		'isMask',
-		'absoluteRenderBounds',
-	]));
+		);
 
-	objArr = helpers.extractFieldsRecursively(objArr, ['cssProps', 'characters', 'type', 'name']);
+		// Apply transformations with error handling
+		try {
+			objArr.forEach(obj => helpers.deletePropertiesRecursively(obj, [
+				'relativeTransform',
+				'isMask',
+				'absoluteRenderBounds',
+			]));
 
-    // obj = helpers.clean(obj);
-	const json = JSON.stringify(objArr, null, 2);
-	// const json = JSON.stringify(await traverseNode(selection[0]), null, 2);
-	
-	console.log('DBG: Generate');
+			objArr = helpers.extractFieldsRecursively(objArr, ['cssProps', 'characters', 'type', 'name']);
+		} catch (err) {
+			const error = err as Error;
+			console.error("Error during property processing:", error);
+			const nodeData = sanitizeNodeForLogging(node);
+			
+			return [
+				{
+					language: "PLAINTEXT",
+					code: JSON.stringify({
+						error: "Failed to process node properties",
+						details: error.message,
+						nodeData: nodeData
+					}, null, 2),
+					title: "Export Error - Node Data",
+				},
+			];
+		}
 
-	const code = `{
-		name: "${node.name}"
-	}`;
+		const json = JSON.stringify(objArr, null, 2);
+		console.log('DBG: Generate successful');
+
 	return [
 		{
 			language: "PLAINTEXT",
 			code: json,
-			title: "Codegen Plugin 9",
-		},
-	];
+				title: "Figma Node Export",
+			},
+		];
+
+	} catch (err) {
+		const error = err as Error;
+		console.error('DBG: Generate failed:', error);
+		
+		// Create fallback data for debugging
+		const nodeData = sanitizeNodeForLogging(node);
+		const errorInfo = {
+			error: error.message,
+			stack: error.stack,
+			timestamp: new Date().toISOString(),
+			nodeData: nodeData,
+			pluginVersion: "1.0.0",
+			userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown'
+		};
+
+		return [
+			{
+				language: "PLAINTEXT", 
+				code: JSON.stringify(errorInfo, null, 2),
+				title: "Export Error - Debug Info",
+			},
+		];
+	}
 });
