@@ -220,7 +220,14 @@ If you encounter any issues or have questions:
 3. Include steps to reproduce for bugs
 4. Provide Figma file examples when relevant
 
-## 🔄 Changelog
+## �� Changelog
+
+### v1.1.0
+- Enhanced CSS variable export: CSS props now include collection info to prevent naming conflicts
+- Improved error handling and debug info in code generation and export
+- Added support for exporting images and SVGs as PNG in JSON output
+- More robust node property extraction and recursive field filtering
+- Various code quality and stability improvements
 
 ### v1.0.0
 - Initial release
