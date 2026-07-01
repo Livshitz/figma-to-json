@@ -2,6 +2,8 @@
 
 A Figma plugin that exports your designs to structured JSON format with comprehensive node data including styles, layouts, and properties.
 
+**Companion:** [figma2html](https://github.com/Livshitz/figma2html) converts the JSON this plugin produces into HTML with inline styles.
+
 ## 🚀 Features
 
 - **Complete Node Export**: Exports all Figma node types with their properties
